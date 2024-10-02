@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
 @SupportedAnnotationTypes("ba.ekapic.Builder")
 @SupportedSourceVersion(SourceVersion.RELEASE_21)
 public class BuilderAnnotationProcessor extends AbstractProcessor {
-	// TODO: BuilderIgnore annotation
 	private static final Logger LOGGER = LoggerFactory.getLogger(BuilderAnnotationProcessor.class);
 
 	@Override
@@ -39,6 +38,7 @@ public class BuilderAnnotationProcessor extends AbstractProcessor {
 
 				final Set<Element> fieldElements = element.getEnclosedElements().stream()
 						.filter(el -> ElementKind.FIELD == el.getKind())
+						.filter(el -> el.getAnnotation(BuilderIgnore.class) == null)
 						.collect(Collectors.toSet());
 
 				final Map<String, String> fields = fieldElements.stream().collect(Collectors.toMap(
@@ -82,9 +82,6 @@ public class BuilderAnnotationProcessor extends AbstractProcessor {
 				generateBuilderProperties(fields, out);
 				out.println();
 
-//				generateBuilderConstructors(metaClassName, fields, out);
-//				out.println();
-
 				generateWithMethods(metaClassName, fields, out);
 
 				generateBuildMethod(clazz, qualifiedName, fields, out);
@@ -100,34 +97,6 @@ public class BuilderAnnotationProcessor extends AbstractProcessor {
 		for (final Map.Entry<String, String> entry : fields.entrySet()) {
 			out.println("    private " + entry.getValue() + " " + entry.getKey() + ";");
 		}
-	}
-
-	private void generateBuilderConstructors(final String className,
-											 final Map<String, String> fields,
-											 final PrintWriter out) {
-		// Default constructor
-		out.println("	public " + className + "() {}");
-
-		// TODO: this constructor is also now unnecessary.
-		// All properties constructor
-		out.print("    private " + className + "(");
-		final Iterator<Map.Entry<String, String>> it = fields.entrySet().iterator();
-		while (it.hasNext()) {
-			final Map.Entry<String, String> field = it.next();
-
-			out.print("final " + field.getValue() + " " + field.getKey());
-
-			if (it.hasNext()) {
-				out.print(", ");
-			}
-		}
-		out.println(") {");
-
-		for (final Map.Entry<String, String> entry : fields.entrySet()) {
-			out.println("		this." + entry.getKey() + " = " + entry.getKey() + ";");
-		}
-
-		out.println("	}");
 	}
 
 	private void generateWithMethods(final String metaClassName,
@@ -166,49 +135,6 @@ public class BuilderAnnotationProcessor extends AbstractProcessor {
 		out.println();
 		out.println("		return model;");
 		out.println("	}");
-	}
-
-	private void generateConstructorBuildMethod(final Element builderCtor) {
-		final ExecutableElement ctor = (ExecutableElement) builderCtor;
-
-		final List<? extends VariableElement> ctorParams = ctor.getParameters();
-
-		/**
-		 * TODO: use reflection to set properties instead of setters/constructors
-		 */
-	}
-
-	private void generateSettersBuildMethod(final Element classElement,
-											final String className,
-											final Map<String, String> fields,
-											final PrintWriter out) {
-		out.println("		final " + className + " model = new " + className + "();");
-
-		for (final String fieldName : fields.keySet()) {
-			final String setter = setterMethodName(classElement, fieldName);
-
-			if (setter != null) {
-				out.println("		model." + setter + "(" + fieldName + ");");
-			} else {
-				LOGGER.warn("Field " + fieldName + " was not ignored but no setter was found. Ignoring it. Consider " +
-						"declaring a setter for this field or annotating it with @BuilderIgnore");
-			}
-		}
-
-		out.println();
-		out.println("		return model;");
-	}
-
-	private String setterMethodName(final Element classElement, final String fieldName) {
-		return classElement.getEnclosedElements().stream()
-				.filter(el -> el.getKind() == ElementKind.METHOD)
-				.filter(method -> {
-					final String name = method.getSimpleName().toString();
-					return name.startsWith("set") && name.toLowerCase().contains(fieldName.toLowerCase());
-				})
-				.findFirst()
-				.map(method -> method.getSimpleName().toString())
-				.orElse(null);
 	}
 
 	private String camelCaseToPascalCase(final String name) {
